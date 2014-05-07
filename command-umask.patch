@@ -1,0 +1,6 @@
+--- ../kippo/commands/base.py
++++ ../kippo/commands/base.py
+@@ -300,1 +300,2 @@
+ commands['export'] = command_nop
++commands['umask'] = command_nop
+ commands['/bin/bash'] = command_nop

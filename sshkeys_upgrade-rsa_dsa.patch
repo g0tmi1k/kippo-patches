@@ -1,0 +1,84 @@
+diff --git a/kippo.cfg.dist b/kippo.cfg.dist
+--- ../kippo.cfg.dist
++++ ../kippo.cfg.dist
+@@ -76,10 +76,10 @@
+ # Public and private SSH key files. If these don't exist, they are created
+ # automatically.
+-#
+-# (defaults: public.key and private.key)
+-public_key = public.key
+-private_key = private.key
++rsa_public_key = data/ssh_host_rsa_key.pub
++rsa_private_key = data/ssh_host_rsa_key
++dsa_public_key = data/ssh_host_dsa_key.pub
++dsa_private_key = data/ssh_host_dsa_key
+
+ # Initial root password. NO LONGER USED!
+ # Instead, see {data_path}/userdb.txt
+
+--- ../kippo.tac
++++ ../kippo.tac
+@@ -28,10 +28,13 @@
+ factory = honeypot.HoneyPotSSHFactory()
+ factory.portal = portal.Portal(honeypot.HoneyPotRealm())
+
+-pubKeyString, privKeyString = honeypot.getRSAKeys()
++rsa_pubKeyString, rsa_privKeyString = honeypot.getRSAKeys()
++dsa_pubKeyString, dsa_privKeyString = honeypot.getDSAKeys()
+ factory.portal.registerChecker(honeypot.HoneypotPasswordChecker())
+-factory.publicKeys = {'ssh-rsa': keys.Key.fromString(data=pubKeyString)}
+-factory.privateKeys = {'ssh-rsa': keys.Key.fromString(data=privKeyString)}
++factory.publicKeys = {'ssh-rsa': keys.Key.fromString(data=rsa_pubKeyString),
++                      'ssh-dss': keys.Key.fromString(data=dsa_pubKeyString)}
++factory.privateKeys = {'ssh-rsa': keys.Key.fromString(data=rsa_privKeyString),
++                       'ssh-dss': keys.Key.fromString(data=dsa_privKeyString)}
+
+ cfg = config()
+ if cfg.has_option('honeypot', 'ssh_addr'):
+
+--- ../kippo/core/honeypot.py
++++ ../kippo/core/honeypot.py
+@@ -697,18 +752,36 @@
+ def getRSAKeys():
+     cfg = config()
+-    public_key = cfg.get('honeypot', 'public_key')
+-    private_key = cfg.get('honeypot', 'private_key')
++    public_key = cfg.get('honeypot', 'rsa_public_key')
++    private_key = cfg.get('honeypot', 'rsa_private_key')
+     if not (os.path.exists(public_key) and os.path.exists(private_key)):
+-        # generate a RSA keypair
+-        print "Generating RSA keypair..."
++        print "Generating new RSA keypair..."
+         from Crypto.PublicKey import RSA
+         from twisted.python import randbytes
+-        KEY_LENGTH = 1024
++        KEY_LENGTH = 2048
+         rsaKey = RSA.generate(KEY_LENGTH, randbytes.secureRandom)
+-        publicKeyString = keys.Key(rsaKey).public().toString('openssh')
+-        privateKeyString = keys.Key(rsaKey).toString('openssh')
+-        # save keys for next time
++        publicKeyString = twisted.conch.ssh.keys.Key(rsaKey).public().toString('openssh')
++        privateKeyString = twisted.conch.ssh.keys.Key(rsaKey).toString('openssh')
++        file(public_key, 'w+b').write(publicKeyString)
++        file(private_key, 'w+b').write(privateKeyString)
++        print "done."
++    else:
++        publicKeyString = file(public_key).read()
++        privateKeyString = file(private_key).read()
++    return publicKeyString, privateKeyString
++
++def getDSAKeys():
++    cfg = config()
++    public_key = cfg.get('honeypot', 'dsa_public_key')
++    private_key = cfg.get('honeypot', 'dsa_private_key')
++    if not (os.path.exists(public_key) and os.path.exists(private_key)):
++        print "Generating new DSA keypair..."
++        from Crypto.PublicKey import DSA
++        from twisted.python import randbytes
++        KEY_LENGTH = 1024
++        dsaKey = DSA.generate(KEY_LENGTH, randbytes.secureRandom)
++        publicKeyString = twisted.conch.ssh.keys.Key(dsaKey).public().toString('openssh')
++        privateKeyString = twisted.conch.ssh.keys.Key(dsaKey).toString('openssh')
+         file(public_key, 'w+b').write(publicKeyString)
+         file(private_key, 'w+b').write(privateKeyString)
+         print "done."

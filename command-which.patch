@@ -1,0 +1,74 @@
+--- ../kippo/commands/__init__.py
++++ ../kippo/commands/__init__.py
+@@ -15,1 +15,2 @@
+     'fs',
++    'which',
+--- /dev/null
++++ ../kippo/commands/which.py
+@@ -0,0 +1,28 @@
++# Copyright (c) 2013 Bas Stottelaar <basstottelaar [AT] gmail [DOT] com>
++
++from kippo.core.honeypot import HoneyPotCommand
++
++commands = {}
++
++class command_which(HoneyPotCommand):
++    # Do not resolve args
++    resolve_args = False
++
++    def call(self):
++        """ Look up all the arguments on PATH and print each (first) result """
++
++        # No arguments, just exit
++        if not len(self.args) or not 'PATH' in self.env:
++            return
++
++        # Look up each file
++        for f in self.args:
++            for path in self.env['PATH'].split(':'):
++                resolved = self.fs.resolve_path(f, path)
++
++                if self.fs.exists(resolved):
++                    self.writeln("%s/%s" % (path, f))
++                    continue
++
++# Definition
++commands['/bin/which'] = command_which
+--- ../kippo/core/honeypot.py
++++ ../kippo/core/honeypot.py
+@@ -21,9 +21,10 @@
+ import ConfigParser
+
+ class HoneyPotCommand(object):
+-    def __init__(self, honeypot, *args):
++    def __init__(self, honeypot, *args, **kwargs):
+         self.honeypot = honeypot
+         self.args = args
++        self.env = kwargs
+         self.writeln = self.honeypot.writeln
+         self.write = self.honeypot.terminal.write
+         self.nextLine = self.honeypot.terminal.nextLine
+@@ -123,7 +124,11 @@
+         if cmdclass:
+             print 'Command found: %s' % (line,)
+             self.honeypot.logDispatch('Command found: %s' % (line,))
+-            self.honeypot.call_command(cmdclass, *rargs)
++
++            if getattr(cmdclass, 'resolve_args', False):
++                self.honeypot.call_command(cmdclass, *rargs, **envvars)
++            else:
++                self.honeypot.call_command(cmdclass, *args, **envvars)
+         else:
+             self.honeypot.logDispatch('Command not found: %s' % (line,))
+             print 'Command not found: %s' % (line,)
+@@ -364,8 +369,8 @@
+         self.terminal.write(data)
+         self.terminal.nextLine()
+
+-    def call_command(self, cmd, *args):
+-        obj = cmd(self, *args)
++    def call_command(self, cmd, *args, **kwargs):
++        obj = cmd(self, *args, **kwargs)
+         self.cmdstack.append(obj)
+         self.setTypeoverMode()
+         obj.start()

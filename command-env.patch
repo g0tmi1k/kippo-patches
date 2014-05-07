@@ -1,0 +1,62 @@
+--- ../kippo/commands/__init__.py
++++ ../kippo/commands/__init__.py
+@@ -15,1 +15,2 @@
+     'fs',
++    'env',
+--- /dev/null
++++ ../kippo/commands/env.py
+@@ -0,0 +1,16 @@
++# Copyright (c) 2013 Bas Stottelaar <basstottelaar [AT] gmail [DOT] com>
++
++from kippo.core.honeypot import HoneyPotCommand
++
++commands = {}
++
++class command_env(HoneyPotCommand):
++    def call(self):
++        """ Print the current environment variables """
++
++        if self.env and len(self.env) > 0:
++            for key, value in self.env.iteritems():
++                self.writeln("%s=%s" % (key, value))
++
++# Definition
++commands['/usr/bin/env'] = command_env
+--- ../kippo/core/honeypot.py
++++ ../kippo/core/honeypot.py
+@@ -21,9 +21,10 @@
+ import ConfigParser
+
+ class HoneyPotCommand(object):
+-    def __init__(self, honeypot, *args):
++    def __init__(self, honeypot, *args, **kwargs):
+         self.honeypot = honeypot
+         self.args = args
++        self.env = kwargs
+         self.writeln = self.honeypot.writeln
+         self.write = self.honeypot.terminal.write
+         self.nextLine = self.honeypot.terminal.nextLine
+@@ -123,7 +124,11 @@
+         if cmdclass:
+             print 'Command found: %s' % (line,)
+             self.honeypot.logDispatch('Command found: %s' % (line,))
+-            self.honeypot.call_command(cmdclass, *rargs)
++
++            if getattr(cmdclass, 'resolve_args', False):
++                self.honeypot.call_command(cmdclass, *rargs, **envvars)
++            else:
++                self.honeypot.call_command(cmdclass, *args, **envvars)
+         else:
+             self.honeypot.logDispatch('Command not found: %s' % (line,))
+             print 'Command not found: %s' % (line,)
+@@ -364,8 +369,8 @@
+         self.terminal.write(data)
+         self.terminal.nextLine()
+
+-    def call_command(self, cmd, *args):
+-        obj = cmd(self, *args)
++    def call_command(self, cmd, *args, **kwargs):
++        obj = cmd(self, *args, **kwargs)
+         self.cmdstack.append(obj)
+         self.setTypeoverMode()
+         obj.start()
